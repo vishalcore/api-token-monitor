@@ -1,15 +1,14 @@
 # API Token Monitor
 
-A GitHub Actions workflow that monitors API token usage and sends Discord notifications when issues are detected.
+A GitHub Actions workflow that monitors API token usage and sends Discord notifications.
 
 ## Features
 
 - ✅ Monitors API token status every 30 minutes
-- 🚨 Sends Discord alerts when "requires more credits" is detected
-- ⚠️ Detects other token-related warnings and API failures
-- 📊 Sends success notifications to confirm monitoring is working
-- 🔧 Tests Discord webhook connectivity
-- 🔍 Enhanced error handling and debugging
+- 📊 Sends API responses to Discord for monitoring
+- ⏱️ Includes timestamps with each notification
+- 🔄 Can be triggered manually or runs on schedule
+- 📝 Formats JSON responses for easy reading
 
 ## Setup
 
@@ -17,7 +16,7 @@ A GitHub Actions workflow that monitors API token usage and sends Discord notifi
 
 You need to configure these secrets in your GitHub repository:
 
-- `API_TOKEN`: Your OpenRouter API token
+- `API_KEY`: Your OpenRouter API key
 - `DISCORD_WEBHOOK_URL`: Your Discord webhook URL
 
 To add secrets:

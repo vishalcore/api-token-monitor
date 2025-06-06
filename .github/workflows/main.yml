@@ -2,113 +2,51 @@ name: API Token Monitor
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  # Every 30 minutes
-  workflow_dispatch:  # Manual trigger button
+    # Runs every 30 minutes
+    - cron: "*/30 * * * *"
+  # Manual trigger option
+  workflow_dispatch:
 
 jobs:
-  monitor:
+  check-api:
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Check API Response
-        id: api_check
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Call API and send to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          API_KEY: ${{ secrets.API_KEY }}
         run: |
-          echo "Checking API tokens..."
-          
-          # Make minimal API request to check token status
-          response=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST \
+          # Make the API request and store the response
+          RESPONSE=$(curl -s -X POST \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${{ secrets.API_TOKEN }}" \
+            -H "Authorization: Bearer $API_KEY" \
             -H "HTTP-Referer: https://aihime.app" \
             -H "X-Title: Aihime Anime Chat App" \
             -d '{
               "model": "meta-llama/llama-4-scout",
               "messages": [
-                {"role": "user", "content": "Hi"}
-              ],
-              "max_tokens": 1
+                {
+                  "role": "system", 
+                  "content": "Say Hi"
+                },
+                {
+                  "role": "user",
+                  "content": "Tell me how many tokens remaining"
+                }
+              ]
             }' \
             https://openrouter.ai/api/v1/chat/completions)
+            
+          # Format the response for Discord (escape quotes for JSON)
+          FORMATTED_RESPONSE=$(echo $RESPONSE | jq -r tostring | sed 's/"/\\"/g')
           
-          # Extract HTTP status
-          http_status=$(echo "$response" | grep "HTTP_STATUS:" | cut -d: -f2)
-          response_body=$(echo "$response" | sed '/HTTP_STATUS:/d')
+          # Get current timestamp
+          TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
           
-          echo "HTTP Status: $http_status"
-          echo "API Response:"
-          echo "$response_body"
-          
-          # Check if API call failed
-          if [[ "$http_status" != "200" ]]; then
-            echo "alert=true" >> $GITHUB_OUTPUT
-            echo "message=API call failed with status $http_status: $response_body" >> $GITHUB_OUTPUT
-            echo "error_type=api_failure" >> $GITHUB_OUTPUT
-          # Check specifically for "requires more credits" message
-          elif echo "$response_body" | grep -qi "requires more credits"; then
-            echo "alert=true" >> $GITHUB_OUTPUT
-            echo "message=$response_body" >> $GITHUB_OUTPUT
-            echo "error_type=tokens_exhausted" >> $GITHUB_OUTPUT
-          # Check for other token-related issues
-          elif echo "$response_body" | grep -qi "low\|limit\|exceeded\|quota\|insufficient\|error"; then
-            echo "alert=true" >> $GITHUB_OUTPUT
-            echo "message=$response_body" >> $GITHUB_OUTPUT
-            echo "error_type=token_warning" >> $GITHUB_OUTPUT
-          else
-            echo "alert=false" >> $GITHUB_OUTPUT
-            echo "message=$response_body" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Send Discord Alert Notification
-        if: steps.api_check.outputs.alert == 'true'
-        run: |
-          # Determine notification title and description based on error type
-          if [[ "${{ steps.api_check.outputs.error_type }}" == "tokens_exhausted" ]]; then
-            title="🚨 TOKENS EXHAUSTED"
-            description="API tokens have been exhausted! Requires more credits to continue."
-            color=15158332
-          elif [[ "${{ steps.api_check.outputs.error_type }}" == "api_failure" ]]; then
-            title="🚨 API Failure"
-            description="API call failed - check your API token and connection."
-            color=15158332
-          else
-            title="⚠️ Token Warning"
-            description="Potential token limit warning detected."
-            color=16776960
-          fi
-          
-          curl -H "Content-Type: application/json" \
-            -d "{
-              \"embeds\": [{
-                \"title\": \"$title\",
-                \"description\": \"$description\",
-                \"color\": $color,
-                \"fields\": [{
-                  \"name\": \"Response\",
-                  \"value\": \"$(echo '${{ steps.api_check.outputs.message }}' | head -c 1000)\"
-                }],
-                \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
-              }]
-            }" \
-            ${{ secrets.DISCORD_WEBHOOK_URL }}
-
-      - name: Log Success
-        if: steps.api_check.outputs.alert == 'false'
-        run: echo "✅ API check completed successfully - no alerts triggered"
-
-      - name: Send API Response to Discord
-        run: |
-          # Always send the API response every 30 minutes
-          curl -H "Content-Type: application/json" \
-            -d "{
-              \"embeds\": [{
-                \"title\": \"📊 API Response Monitor\",
-                \"description\": \"API response received at $(date -u +%Y-%m-%d\ %H:%M:%S\ UTC)\",
-                \"color\": 3447003,
-                \"fields\": [{
-                  \"name\": \"API Response\",
-                  \"value\": \"$(echo '${{ steps.api_check.outputs.message }}' | head -c 1000)\"
-                }],
-                \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
-              }]
-            }" \
-            ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # Send to Discord webhook
+          curl -X POST -H "Content-Type: application/json" \
+            -d "{\"content\": \"**API Token Check - $TIMESTAMP**\n\`\`\`json\n$FORMATTED_RESPONSE\n\`\`\`\"}" \
+            $DISCORD_WEBHOOK_URL
