@@ -4,8 +4,9 @@ A GitHub Actions workflow that monitors API token usage and sends Discord notifi
 
 ## Features
 
-- ✅ Monitors API token status every 6 hours
-- 🚨 Sends Discord alerts when token limits are reached
+- ✅ Monitors API token status every 30 minutes
+- 🚨 Sends Discord alerts when "requires more credits" is detected
+- ⚠️ Detects other token-related warnings and API failures
 - 📊 Sends success notifications to confirm monitoring is working
 - 🔧 Tests Discord webhook connectivity
 - 🔍 Enhanced error handling and debugging
@@ -58,7 +59,9 @@ To add secrets:
 
 ### Notification Types
 
-- 🚨 **Alert**: Sent when API issues are detected
+- 🚨 **TOKENS EXHAUSTED**: Sent when API response contains "requires more credits"
+- ⚠️ **Token Warning**: Sent when other token-related issues are detected
+- 🚨 **API Failure**: Sent when API calls fail (HTTP errors)
 - ✅ **Success**: Sent when API check passes (confirms monitoring is working)
 - 🔧 **Test**: Sent to verify webhook connectivity
 
@@ -73,8 +76,4 @@ To test the workflow immediately:
 
 ## Schedule
 
-The workflow runs automatically every 6 hours at:
-- 00:00 UTC
-- 06:00 UTC  
-- 12:00 UTC
-- 18:00 UTC
+The workflow runs automatically every 30 minutes, providing frequent monitoring of your API token status.

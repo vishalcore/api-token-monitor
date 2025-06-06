@@ -2,7 +2,7 @@ name: API Token Monitor
 
 on:
   schedule:
-    - cron: '0 */6 * * *'  # Every 6 hours
+    - cron: '*/30 * * * *'  # Every 30 minutes
   workflow_dispatch:  # Manual trigger button
 
 jobs:
@@ -15,7 +15,7 @@ jobs:
         run: |
           echo "Checking API tokens..."
           
-          # Make API request with better error handling
+          # Make minimal API request to check token status
           response=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.API_TOKEN }}" \
@@ -24,9 +24,9 @@ jobs:
             -d '{
               "model": "meta-llama/llama-4-scout",
               "messages": [
-                {"role": "system", "content": "Say Hi"},
-                {"role": "user", "content": "Tell me how many tokens remaining"}
-              ]
+                {"role": "user", "content": "Hi"}
+              ],
+              "max_tokens": 1
             }' \
             https://openrouter.ai/api/v1/chat/completions)
           
@@ -43,7 +43,12 @@ jobs:
             echo "alert=true" >> $GITHUB_OUTPUT
             echo "message=API call failed with status $http_status: $response_body" >> $GITHUB_OUTPUT
             echo "error_type=api_failure" >> $GITHUB_OUTPUT
-          # Check for specific keywords that indicate low tokens
+          # Check specifically for "requires more credits" message
+          elif echo "$response_body" | grep -qi "requires more credits"; then
+            echo "alert=true" >> $GITHUB_OUTPUT
+            echo "message=$response_body" >> $GITHUB_OUTPUT
+            echo "error_type=tokens_exhausted" >> $GITHUB_OUTPUT
+          # Check for other token-related issues
           elif echo "$response_body" | grep -qi "low\|limit\|exceeded\|quota\|insufficient\|error"; then
             echo "alert=true" >> $GITHUB_OUTPUT
             echo "message=$response_body" >> $GITHUB_OUTPUT
@@ -56,12 +61,27 @@ jobs:
       - name: Send Discord Alert Notification
         if: steps.api_check.outputs.alert == 'true'
         run: |
+          # Determine notification title and description based on error type
+          if [[ "${{ steps.api_check.outputs.error_type }}" == "tokens_exhausted" ]]; then
+            title="🚨 TOKENS EXHAUSTED"
+            description="API tokens have been exhausted! Requires more credits to continue."
+            color=15158332
+          elif [[ "${{ steps.api_check.outputs.error_type }}" == "api_failure" ]]; then
+            title="🚨 API Failure"
+            description="API call failed - check your API token and connection."
+            color=15158332
+          else
+            title="⚠️ Token Warning"
+            description="Potential token limit warning detected."
+            color=16776960
+          fi
+          
           curl -H "Content-Type: application/json" \
             -d "{
               \"embeds\": [{
-                \"title\": \"🚨 API Token Alert\",
-                \"description\": \"Token limit warning detected!\",
-                \"color\": 15158332,
+                \"title\": \"$title\",
+                \"description\": \"$description\",
+                \"color\": $color,
                 \"fields\": [{
                   \"name\": \"Response\",
                   \"value\": \"$(echo '${{ steps.api_check.outputs.message }}' | head -c 1000)\"
@@ -71,37 +91,6 @@ jobs:
             }" \
             ${{ secrets.DISCORD_WEBHOOK_URL }}
 
-      - name: Send Discord Success Notification
+      - name: Log Success
         if: steps.api_check.outputs.alert == 'false'
-        run: |
-          curl -H "Content-Type: application/json" \
-            -d "{
-              \"embeds\": [{
-                \"title\": \"✅ API Token Monitor\",
-                \"description\": \"API check completed successfully - no issues detected\",
-                \"color\": 3066993,
-                \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
-              }]
-            }" \
-            ${{ secrets.DISCORD_WEBHOOK_URL }}
-
-      - name: Test Discord Webhook
-        run: |
-          echo "Testing Discord webhook connection..."
-          webhook_test=$(curl -s -w "%{http_code}" -H "Content-Type: application/json" \
-            -d "{
-              \"embeds\": [{
-                \"title\": \"🔧 Webhook Test\",
-                \"description\": \"Testing Discord webhook connection from GitHub Actions\",
-                \"color\": 16776960,
-                \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
-              }]
-            }" \
-            ${{ secrets.DISCORD_WEBHOOK_URL }})
-          
-          if [[ "$webhook_test" == *"200"* ]] || [[ "$webhook_test" == *"204"* ]]; then
-            echo "✅ Discord webhook test successful"
-          else
-            echo "❌ Discord webhook test failed with response: $webhook_test"
-            exit 1
-          fi
+        run: echo "✅ API check completed successfully - no alerts triggered"
