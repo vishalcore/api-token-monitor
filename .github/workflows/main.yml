@@ -15,7 +15,8 @@ jobs:
         run: |
           echo "Checking API tokens..."
           
-          response=$(curl -s -X POST \
+          # Make API request with better error handling
+          response=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.API_TOKEN }}" \
             -H "HTTP-Referer: https://aihime.app" \
@@ -29,18 +30,30 @@ jobs:
             }' \
             https://openrouter.ai/api/v1/chat/completions)
           
-          echo "API Response:"
-          echo "$response"
+          # Extract HTTP status
+          http_status=$(echo "$response" | grep "HTTP_STATUS:" | cut -d: -f2)
+          response_body=$(echo "$response" | sed '/HTTP_STATUS:/d')
           
-          # Check for specific keywords that indicate low tokens
-          if echo "$response" | grep -qi "low\|limit\|exceeded\|quota\|insufficient"; then
+          echo "HTTP Status: $http_status"
+          echo "API Response:"
+          echo "$response_body"
+          
+          # Check if API call failed
+          if [[ "$http_status" != "200" ]]; then
             echo "alert=true" >> $GITHUB_OUTPUT
-            echo "message=$response" >> $GITHUB_OUTPUT
+            echo "message=API call failed with status $http_status: $response_body" >> $GITHUB_OUTPUT
+            echo "error_type=api_failure" >> $GITHUB_OUTPUT
+          # Check for specific keywords that indicate low tokens
+          elif echo "$response_body" | grep -qi "low\|limit\|exceeded\|quota\|insufficient\|error"; then
+            echo "alert=true" >> $GITHUB_OUTPUT
+            echo "message=$response_body" >> $GITHUB_OUTPUT
+            echo "error_type=token_warning" >> $GITHUB_OUTPUT
           else
             echo "alert=false" >> $GITHUB_OUTPUT
+            echo "message=$response_body" >> $GITHUB_OUTPUT
           fi
 
-      - name: Send Discord Notification
+      - name: Send Discord Alert Notification
         if: steps.api_check.outputs.alert == 'true'
         run: |
           curl -H "Content-Type: application/json" \
@@ -58,6 +71,37 @@ jobs:
             }" \
             ${{ secrets.DISCORD_WEBHOOK_URL }}
 
-      - name: Log Success
+      - name: Send Discord Success Notification
         if: steps.api_check.outputs.alert == 'false'
-        run: echo "✅ API check completed successfully - no alerts triggered"
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d "{
+              \"embeds\": [{
+                \"title\": \"✅ API Token Monitor\",
+                \"description\": \"API check completed successfully - no issues detected\",
+                \"color\": 3066993,
+                \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+              }]
+            }" \
+            ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+      - name: Test Discord Webhook
+        run: |
+          echo "Testing Discord webhook connection..."
+          webhook_test=$(curl -s -w "%{http_code}" -H "Content-Type: application/json" \
+            -d "{
+              \"embeds\": [{
+                \"title\": \"🔧 Webhook Test\",
+                \"description\": \"Testing Discord webhook connection from GitHub Actions\",
+                \"color\": 16776960,
+                \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+              }]
+            }" \
+            ${{ secrets.DISCORD_WEBHOOK_URL }})
+          
+          if [[ "$webhook_test" == *"200"* ]] || [[ "$webhook_test" == *"204"* ]]; then
+            echo "✅ Discord webhook test successful"
+          else
+            echo "❌ Discord webhook test failed with response: $webhook_test"
+            exit 1
+          fi
