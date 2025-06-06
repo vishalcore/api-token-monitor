@@ -94,3 +94,21 @@ jobs:
       - name: Log Success
         if: steps.api_check.outputs.alert == 'false'
         run: echo "✅ API check completed successfully - no alerts triggered"
+
+      - name: Send API Response to Discord
+        run: |
+          # Always send the API response every 30 minutes
+          curl -H "Content-Type: application/json" \
+            -d "{
+              \"embeds\": [{
+                \"title\": \"📊 API Response Monitor\",
+                \"description\": \"API response received at $(date -u +%Y-%m-%d\ %H:%M:%S\ UTC)\",
+                \"color\": 3447003,
+                \"fields\": [{
+                  \"name\": \"API Response\",
+                  \"value\": \"$(echo '${{ steps.api_check.outputs.message }}' | head -c 1000)\"
+                }],
+                \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+              }]
+            }" \
+            ${{ secrets.DISCORD_WEBHOOK_URL }}
