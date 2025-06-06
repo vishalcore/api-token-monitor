@@ -1,0 +1,63 @@
+name: API Token Monitor
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:  # Manual trigger button
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check API Response
+        id: api_check
+        run: |
+          echo "Checking API tokens..."
+          
+          response=$(curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.API_TOKEN }}" \
+            -H "HTTP-Referer: https://aihime.app" \
+            -H "X-Title: Aihime Anime Chat App" \
+            -d '{
+              "model": "meta-llama/llama-4-scout",
+              "messages": [
+                {"role": "system", "content": "Say Hi"},
+                {"role": "user", "content": "Tell me how many tokens remaining"}
+              ]
+            }' \
+            https://openrouter.ai/api/v1/chat/completions)
+          
+          echo "API Response:"
+          echo "$response"
+          
+          # Check for specific keywords that indicate low tokens
+          if echo "$response" | grep -qi "low\|limit\|exceeded\|quota\|insufficient"; then
+            echo "alert=true" >> $GITHUB_OUTPUT
+            echo "message=$response" >> $GITHUB_OUTPUT
+          else
+            echo "alert=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send Discord Notification
+        if: steps.api_check.outputs.alert == 'true'
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d "{
+              \"embeds\": [{
+                \"title\": \"🚨 API Token Alert\",
+                \"description\": \"Token limit warning detected!\",
+                \"color\": 15158332,
+                \"fields\": [{
+                  \"name\": \"Response\",
+                  \"value\": \"$(echo '${{ steps.api_check.outputs.message }}' | head -c 1000)\"
+                }],
+                \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+              }]
+            }" \
+            ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+      - name: Log Success
+        if: steps.api_check.outputs.alert == 'false'
+        run: echo "✅ API check completed successfully - no alerts triggered"
