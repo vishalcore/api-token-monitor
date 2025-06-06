@@ -31,10 +31,6 @@ jobs:
                 {
                   "role": "system", 
                   "content": "Say Hi"
-                },
-                {
-                  "role": "user",
-                  "content": "Tell me how many tokens remaining"
                 }
               ]
             }' \
