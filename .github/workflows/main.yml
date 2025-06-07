@@ -49,8 +49,11 @@ jobs:
               -d "{\"content\": \"⚠️ **ALERT: Tokens Exhausted - $TIMESTAMP** ⚠️\n\nAPI credits have been depleted. Please recharge your account.\"}" \
               $DISCORD_WEBHOOK_URL
           else
-            # Send regular response to Discord webhook
-            curl -X POST -H "Content-Type: application/json" \
-              -d "{\"content\": \"**API Token Check - $TIMESTAMP**\n\`\`\`json\n$FORMATTED_RESPONSE\n\`\`\`\"}" \
-              $DISCORD_WEBHOOK_URL
+            # Send regular response to Discord webhook is commented out
+            # curl -X POST -H "Content-Type: application/json" \
+            #   -d "{\"content\": \"**API Token Check - $TIMESTAMP**\n\`\`\`json\n$FORMATTED_RESPONSE\n\`\`\`\"}" \
+            #   $DISCORD_WEBHOOK_URL
+            
+            # Workflow will only send notification when tokens are exhausted
+            echo "API check completed, tokens not exhausted. No notification sent."
           fi
