@@ -42,7 +42,15 @@ jobs:
           # Get current timestamp
           TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
           
-          # Send to Discord webhook
-          curl -X POST -H "Content-Type: application/json" \
-            -d "{\"content\": \"**API Token Check - $TIMESTAMP**\n\`\`\`json\n$FORMATTED_RESPONSE\n\`\`\`\"}" \
-            $DISCORD_WEBHOOK_URL
+          # Check if response contains "request requires more credits"
+          if echo "$RESPONSE" | grep -q "request requires more credits"; then
+            # Send tokens exhausted notification
+            curl -X POST -H "Content-Type: application/json" \
+              -d "{\"content\": \"⚠️ **ALERT: Tokens Exhausted - $TIMESTAMP** ⚠️\n\nAPI credits have been depleted. Please recharge your account.\"}" \
+              $DISCORD_WEBHOOK_URL
+          else
+            # Send regular response to Discord webhook
+            curl -X POST -H "Content-Type: application/json" \
+              -d "{\"content\": \"**API Token Check - $TIMESTAMP**\n\`\`\`json\n$FORMATTED_RESPONSE\n\`\`\`\"}" \
+              $DISCORD_WEBHOOK_URL
+          fi
