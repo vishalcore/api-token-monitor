@@ -13,11 +13,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        
+      # Add Node.js setup for email functionality
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
       
-      - name: Call API and send to Discord
+      - name: Call API and send notifications
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           API_KEY: ${{ secrets.API_KEY }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
         run: |
           # Make the API request and store the response
           RESPONSE=$(curl -s -X POST \
@@ -44,10 +51,13 @@ jobs:
           
           # Check if response contains "request requires more credits"
           if echo "$RESPONSE" | grep -q "request requires more credits"; then
-            # Send tokens exhausted notification
+            # Send tokens exhausted notification to Discord
             curl -X POST -H "Content-Type: application/json" \
               -d "{\"content\": \"⚠️ **ALERT: Tokens Exhausted - $TIMESTAMP** ⚠️\n\nAPI credits have been depleted. Please recharge your account.\"}" \
               $DISCORD_WEBHOOK_URL
+              
+            # Set tokens exhausted flag for email notification
+            echo "TOKENS_EXHAUSTED=true" >> $GITHUB_ENV
           else
             # Send regular response to Discord webhook is commented out
             # curl -X POST -H "Content-Type: application/json" \
@@ -56,4 +66,27 @@ jobs:
             
             # Workflow will only send notification when tokens are exhausted
             echo "API check completed, tokens not exhausted. No notification sent."
+            echo "TOKENS_EXHAUSTED=false" >> $GITHUB_ENV
           fi
+      
+      - name: Send Email Notification
+        if: env.TOKENS_EXHAUSTED == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.GMAIL_USERNAME }}
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          subject: "⚠️ ALERT: API Tokens Exhausted"
+          body: |
+            API Token Monitor has detected that your OpenRouter API credits have been depleted.
+            
+            Please recharge your account to continue using the service.
+            
+            Time of detection: $(date "+%Y-%m-%d %H:%M:%S")
+            
+            --
+            This is an automated notification from API Token Monitor.
+          to: ${{ secrets.GMAIL_RECIPIENT }}
+          from: API Token Monitor <${{ secrets.GMAIL_USERNAME }}>
