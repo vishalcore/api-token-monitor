@@ -84,8 +84,6 @@ jobs:
             
             Please recharge your account to continue using the service.
             
-            Time of detection: $(date "+%Y-%m-%d %H:%M:%S")
-            
             --
             This is an automated notification from API Token Monitor.
           to: ${{ secrets.GMAIL_RECIPIENT }}
