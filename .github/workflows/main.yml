@@ -31,7 +31,7 @@ jobs:
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $API_KEY" \
             -H "HTTP-Referer: https://aihime.app" \
-            -H "X-Title: Aihime Anime Chat App" \
+            -H "X-Title: Aihime Token" \
             -d '{
               "model": "meta-llama/llama-4-scout",
               "messages": [
