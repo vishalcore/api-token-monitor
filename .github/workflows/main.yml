@@ -2,8 +2,9 @@ name: API Token Monitor
 
 on:
   schedule:
-    # Runs every 30 minutes
-    - cron: "*/30 * * * *"
+    # Runs every 90 minutes by triggering at 0 and 30 past every 3rd hour
+    - cron: "0 */3 * * *"
+    - cron: "30 1-23/3 * * *"
   # Manual trigger option
   workflow_dispatch:
 
